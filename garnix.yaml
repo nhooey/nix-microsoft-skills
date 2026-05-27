@@ -1,8 +1,13 @@
+# One row per (output-class, arch) the flake actually targets, per the
+# nix-garnix-ci skill's wildcard discipline. Scoped to Garnix's host
+# builder arch (x86_64-linux) only — its default-include arch and
+# cheapest runner. Other arches add separate builders per push; opt
+# them back in only when a downstream actually ships there.
+#
+# No `builds.branch` restriction: every push (including PR branches) gets
+# checked. The PR-required ruleset relies on per-PR check feedback.
 builds:
-  exclude:
-    - "*.aarch64-linux.*"
-    - "*.x86_64-darwin.*"
   include:
-    - "checks.*.*"
-    - "packages.*.*"
-    - "devShells.*.*"
+    - "packages.x86_64-linux.*"
+    - "checks.x86_64-linux.*"
+    - "devShells.x86_64-linux.default"
