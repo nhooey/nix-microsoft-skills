@@ -1,12 +1,13 @@
 # One row per (output-class, arch) the flake actually targets, per the
-# nix-garnix-ci skill's wildcard discipline. Scoped to the host arch
-# (aarch64-darwin) only — opt other arches back in when a downstream
-# actually ships there.
+# nix-garnix-ci skill's wildcard discipline. Scoped to Garnix's host
+# builder arch (x86_64-linux) only — its default-include arch and
+# cheapest runner. Other arches add separate builders per push; opt
+# them back in only when a downstream actually ships there.
 #
 # No `builds.branch` restriction: every push (including PR branches) gets
 # checked. The PR-required ruleset relies on per-PR check feedback.
 builds:
   include:
-    - "packages.aarch64-darwin.*"
-    - "checks.aarch64-darwin.*"
-    - "devShells.aarch64-darwin.default"
+    - "packages.x86_64-linux.*"
+    - "checks.x86_64-linux.*"
+    - "devShells.x86_64-linux.default"
