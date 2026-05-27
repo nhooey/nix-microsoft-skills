@@ -1,8 +1,16 @@
+# One row per (output-class, arch) the flake actually targets, per the
+# nix-garnix-ci skill's wildcard discipline. x86_64-linux for Linux
+# consumers, aarch64-darwin for Mac contributors. aarch64-linux and
+# x86_64-darwin are deliberately omitted — opt them back in when a
+# downstream actually ships there.
+#
+# No `builds.branch` restriction: every push (including PR branches) gets
+# checked. The PR-required ruleset relies on per-PR check feedback.
 builds:
-  exclude:
-    - "*.aarch64-linux.*"
-    - "*.x86_64-darwin.*"
   include:
-    - "checks.*.*"
-    - "packages.*.*"
-    - "devShells.*.*"
+    - "packages.x86_64-linux.*"
+    - "packages.aarch64-darwin.*"
+    - "checks.x86_64-linux.*"
+    - "checks.aarch64-darwin.*"
+    - "devShells.x86_64-linux.default"
+    - "devShells.aarch64-darwin.default"

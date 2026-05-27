@@ -2,29 +2,46 @@
   description = "nix-microsoft-skills: Claude Code skills for the Microsoft / .NET stack, packaged as a Nix flake";
 
   inputs = {
+    # Rolling unstable: skills are content, not built artifacts, so we want
+    # the most recent treefmt / nixfmt / shellcheck without waiting for the
+    # next NixOS release. Pin a release branch instead if reproducibility
+    # across years matters more than tool recency.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-parts.url = "github:hercules-ci/flake-parts";
-    flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
+
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
     systems.url = "github:nix-systems/default";
 
-    flake-skills.url = "github:nhooey/flake-skills";
-    flake-skills.inputs.nixpkgs.follows = "nixpkgs";
-    treefmt-nix.url = "github:numtide/treefmt-nix";
-    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+    devshell = {
+      url = "github:numtide/devshell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    flake-skills = {
+      url = "github:nhooey/flake-skills";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     { flake-parts, systems, ... }@inputs:
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = import systems;
-      imports = [ inputs.treefmt-nix.flakeModule ];
+      imports = [
+        inputs.devshell.flakeModule
+        inputs.treefmt-nix.flakeModule
+      ];
 
       perSystem =
         {
           pkgs,
           system,
           lib,
-          self',
           ...
         }:
         let
@@ -117,18 +134,42 @@
             programs.shfmt.enable = true;
           };
 
-          devShells.default = pkgs.mkShellNoCC {
-            packages = with pkgs; [
-              gh
-              jq
-              nixfmt
-              shfmt
-              shellcheck
-              python3
-            ];
-            shellHook = ''
-              echo "nix-microsoft-skills devshell. Try: nix run .#bump (read-only)."
+          devshells.default = {
+            name = "nix-microsoft-skills";
+            motd = ''
+              {bold}{14}nix-microsoft-skills{reset}
+              Run {bold}menu{reset} to list available commands.
             '';
+            packages = [
+              pkgs.gh
+              pkgs.jq
+              pkgs.nixfmt
+              pkgs.shfmt
+              pkgs.shellcheck
+              pkgs.python3
+            ];
+            commands = [
+              # ci
+              {
+                category = "ci";
+                name = "check";
+                help = "Run nix flake check (treefmt + skills-valid + per-skill builds)";
+                command = "nix flake check \"$@\"";
+              }
+              {
+                category = "ci";
+                name = "fmt";
+                help = "Format the tree via treefmt (nixfmt + shfmt)";
+                command = "nix fmt \"$@\"";
+              }
+              # deps
+              {
+                category = "deps";
+                name = "bump";
+                help = "Compare pinned upstream revs to GitHub HEAD; pass --apply to rewrite";
+                command = "nix run .#bump -- \"$@\"";
+              }
+            ];
           };
 
           apps.bump = {
@@ -137,12 +178,12 @@
             program = toString (
               pkgs.writeShellApplication {
                 name = "bump";
-                runtimeInputs = with pkgs; [
-                  bash
-                  coreutils
-                  gh
-                  jq
-                  nix
+                runtimeInputs = [
+                  pkgs.bash
+                  pkgs.coreutils
+                  pkgs.gh
+                  pkgs.jq
+                  pkgs.nix
                 ];
                 text = ''
                   exec bash ${./scripts/bump.sh} "$@"
