@@ -26,6 +26,28 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # The skills-git pack installed at project scope on `nix develop`, via
+    # its `reconcileScript` (matching skills-git's own dev shell idiom).
+    skills-git = {
+      url = "github:nhooey/skills-git";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-skills.follows = "flake-skills";
+      };
+    };
+
+    # skillspkgs' curated `authoring` combination (nix-*, humanizer,
+    # skill-creator, superpowers). Pulled at `?dir=sources/combinations` so
+    # only the combination-builder eval is fetched, not the full skillspkgs
+    # tree.
+    skillspkgs-combinations = {
+      url = "github:nhooey/skillspkgs?dir=sources/combinations";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-skills.follows = "flake-skills";
+      };
+    };
   };
 
   outputs =
@@ -134,11 +156,24 @@
             programs.shfmt.enable = true;
           };
 
+          # Auto-reconcile skills at project scope on `nix develop`: the
+          # skills-git pack and skillspkgs' curated `authoring` combination,
+          # each in its own named startup hook (mirroring skills-git). Both
+          # are declarative + idempotent and own disjoint reconcile appNames
+          # (skills-git = `agent-skills-all`, authoring =
+          # `skillspkgs-authoring`), so they coexist in one scope — each
+          # sweeps only its own strays.
           devshells.default = {
             name = "nix-microsoft-skills";
             motd = ''
               {bold}{14}nix-microsoft-skills{reset}
               Run {bold}menu{reset} to list available commands.
+            '';
+            devshell.startup.install-git-skills.text = ''
+              ${inputs.skills-git.reconcileScript system}
+            '';
+            devshell.startup.install-authoring-skills.text = ''
+              ${inputs.skillspkgs-combinations.combinations.authoring.${system}.reconcileScript}
             '';
             packages = [
               pkgs.gh
