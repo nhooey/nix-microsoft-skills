@@ -27,12 +27,31 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # The dev-shell skill set (git/GitHub + skillspkgs' authoring combination)
-    # as its own sub-flake, so its skill-source inputs stay isolated in
-    # `skills-devshell/flake.lock` rather than this flake's inputs. `flake-skills`
-    # follows the parent's so the whole tree resolves to one rev.
-    skills-devshell = {
-      url = "path:./skills-devshell";
+    # ---------------------------------------------------------------------
+    # Dev-shell skill sources (inlined — consumed only by `devshells` below)
+    # ---------------------------------------------------------------------
+    # The project dev shell installs one curated skill set: the git/GitHub
+    # pack and skillspkgs' `authoring` combination — combined via flake-skills'
+    # `mkCombination` in `outputs` (`devshellSkills`). These were previously
+    # isolated in a `skills-devshell/` sub-flake, but a same-repo sub-flake can
+    # only be addressed by a relative `path:` input (which sandboxed/transitive
+    # consumers reject) or a brittle self-URL (which breaks on any repo/owner/
+    # host rename), so they are inlined here instead. Both `follows` the parent
+    # `nixpkgs` and `flake-skills` so the tree resolves to one rev.
+    skills-git = {
+      url = "github:nhooey/skills-git";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-skills.follows = "flake-skills";
+      };
+    };
+
+    # skillspkgs' curated `authoring` combination, surfaced through its own
+    # subdir flake (`mkCombination` keeps a combination re-composable). This is
+    # a `?dir=` into a *different* repo, which fetches cleanly for transitive
+    # consumers — unlike the self-referential `?dir=` we avoid above.
+    skillspkgs-combinations = {
+      url = "github:nhooey/skillspkgs?dir=sources/combinations";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         flake-skills.follows = "flake-skills";
@@ -41,7 +60,31 @@
   };
 
   outputs =
-    { flake-parts, systems, ... }@inputs:
+    {
+      nixpkgs,
+      flake-parts,
+      systems,
+      flake-skills,
+      skills-git,
+      skillspkgs-combinations,
+      ...
+    }@inputs:
+    let
+      # The project dev-shell skill set, combined from the inlined skill
+      # sources (git/GitHub pack + skillspkgs' `authoring` combination).
+      # `reconcileScript` is a `system -> string` function the dev shell
+      # splices into a startup hook.
+      devshellSkills = flake-skills.lib.mkCombination {
+        inherit nixpkgs;
+        name = "nix-microsoft-skills-devshell";
+        envName = "agent-skills-nix-microsoft-skills-devshell";
+        packagePrefix = "agent-skill-";
+        sources = [
+          { source = skills-git; }
+          { source = skillspkgs-combinations.combinations.authoring; }
+        ];
+      };
+    in
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = import systems;
       imports = [
@@ -157,7 +200,7 @@
               Run {bold}menu{reset} to list available commands.
             '';
             devshell.startup.install-skills.text = ''
-              ${inputs.skills-devshell.reconcileScript.${system}}
+              ${devshellSkills.reconcileScript system}
             '';
             packages = [
               pkgs.gh
