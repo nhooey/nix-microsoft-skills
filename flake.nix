@@ -77,8 +77,9 @@
           ) pins.repos;
 
           # Build one skill via agent-skill-flake.lib.mkSkillFlake and return
-          # just the derivation (the lib also returns apps/install scaffolding
-          # that this consumer-agnostic collection doesn't expose).
+          # a { key; drv; } pair where `key` is the lib's own namespaced
+          # attribute key (agent-skill-<owner>-<name>) so downstream
+          # aggregators see a consistent prefix and bare names never leak.
           mkOne =
             name: pin:
             let
@@ -91,33 +92,41 @@
                 src = skillSrc;
                 inherit (pin) description;
                 systems = [ system ];
-                # Hand the upstream repo coords to the builder so the package
-                # key's owner namespace (and the sentinel's provenance) resolve
-                # to the real source rather than erroring on a null owner; we
-                # consume only `packages.<system>.default` below, so the key
-                # itself is incidental, but a derivable owner keeps the build
-                # from a hard eval error.
+                # Hand the upstream repo coords to the builder so the lib can
+                # derive the owner-namespaced package key
+                # (`agent-skill-<owner>-<name>`) we pick up below.
                 source = {
                   inherit (repoCfg) owner repo rev;
                 };
               };
+              # The lib hands back its canonical namespaced key
+              # (agent-skill-<owner>-<name>) as `passthru.packageKey`, so we
+              # re-key by it directly instead of rediscovering the convention.
+              base = flake.packages.${system}.default;
             in
-            (flake.packages.${system}.default).overrideAttrs (old: {
-              meta = (old.meta or { }) // {
-                homepage = "https://github.com/${repoCfg.owner}/${repoCfg.repo}/tree/${repoCfg.rev}/${pin.srcSubdir}";
-              };
-              passthru = (old.passthru or { }) // {
-                upstream = {
-                  inherit (repoCfg) owner repo rev;
-                  inherit (pin) srcSubdir;
+            {
+              key = base.packageKey;
+              drv = base.overrideAttrs (old: {
+                meta = (old.meta or { }) // {
+                  homepage = "https://github.com/${repoCfg.owner}/${repoCfg.repo}/tree/${repoCfg.rev}/${pin.srcSubdir}";
                 };
-              };
-            });
+                passthru = (old.passthru or { }) // {
+                  upstream = {
+                    inherit (repoCfg) owner repo rev;
+                    inherit (pin) srcSubdir;
+                  };
+                };
+              });
+            };
 
-          skillDrvs = lib.mapAttrs mkOne pins.skills;
+          skillDrvs = lib.listToAttrs (
+            lib.map (pair: lib.nameValuePair pair.key pair.drv) (
+              lib.attrValues (lib.mapAttrs mkOne pins.skills)
+            )
+          );
 
           all = pkgs.symlinkJoin {
-            name = "nix-microsoft-skills-all";
+            name = "agent-skills-nix-microsoft-skills-all";
             paths = lib.attrValues skillDrvs;
           };
 
@@ -143,7 +152,7 @@
         in
         {
           packages = skillDrvs // {
-            inherit all;
+            agent-skills-nix-microsoft-skills-all = all;
             default = all;
           };
 
