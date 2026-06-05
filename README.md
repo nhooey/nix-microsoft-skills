@@ -4,14 +4,14 @@
 
 Ten community [Claude Code agent skills][skills] targeting the
 Microsoft / .NET stack, packaged as a Nix flake. Built on
-[`nhooey/flake-skills`][flake-skills]; intended for inclusion in
+[`nhooey/agent-skill-flake`][agent-skill-flake]; intended for inclusion in
 [`nhooey/skillspkgs`][skillspkgs].
 
 This collection is **consumer-agnostic** — it exposes packages.
 Downstreams decide how to install them.
 
 [skills]: https://www.anthropic.com/engineering/agent-skills
-[flake-skills]: https://github.com/nhooey/flake-skills
+[agent-skill-flake]: https://github.com/nhooey/agent-skill-flake
 [skillspkgs]: https://github.com/nhooey/skillspkgs
 
 ## The 10 skills
