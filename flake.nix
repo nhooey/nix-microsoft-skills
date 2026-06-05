@@ -18,72 +18,32 @@
       url = "github:numtide/devshell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    flake-skills = {
-      url = "github:nhooey/flake-skills";
+    # The skill builder library (zero skill inputs). Used both to BUILD this
+    # repo's own output skills (`lib.mkSkillFlake`) and to wire the root dev
+    # shell to the runtime `skills-devshell/` sub-flake (`lib.devshellSkillsHook`).
+    agent-skill-flake = {
+      url = "github:nhooey/agent-skill-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    # ---------------------------------------------------------------------
-    # Dev-shell skill sources (inlined — consumed only by `devshells` below)
-    # ---------------------------------------------------------------------
-    # The project dev shell installs one curated skill set: the git/GitHub
-    # pack and skillspkgs' `authoring` combination — combined via flake-skills'
-    # `mkCombination` in `outputs` (`devshellSkills`). These were previously
-    # isolated in a `skills-devshell/` sub-flake, but a same-repo sub-flake can
-    # only be addressed by a relative `path:` input (which sandboxed/transitive
-    # consumers reject) or a brittle self-URL (which breaks on any repo/owner/
-    # host rename), so they are inlined here instead. Both `follows` the parent
-    # `nixpkgs` and `flake-skills` so the tree resolves to one rev.
-    skills-git = {
-      url = "github:nhooey/skills-git";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        flake-skills.follows = "flake-skills";
-      };
-    };
-
-    # skillspkgs' curated `authoring` combination, surfaced through its own
-    # subdir flake (`mkCombination` keeps a combination re-composable). This is
-    # a `?dir=` into a *different* repo, which fetches cleanly for transitive
-    # consumers — unlike the self-referential `?dir=` we avoid above.
-    skillspkgs-combinations = {
-      url = "github:nhooey/skillspkgs?dir=sources/combinations";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        flake-skills.follows = "flake-skills";
-      };
-    };
   };
 
   outputs =
     {
-      nixpkgs,
       flake-parts,
       systems,
-      flake-skills,
-      skills-git,
-      skillspkgs-combinations,
+      agent-skill-flake,
       ...
     }@inputs:
     let
-      # The project dev-shell skill set, combined from the inlined skill
-      # sources (git/GitHub pack + skillspkgs' `authoring` combination).
-      # `reconcileScript` is a `system -> string` function the dev shell
-      # splices into a startup hook.
-      devshellSkills = flake-skills.lib.mkCombination {
-        inherit nixpkgs;
-        name = "nix-microsoft-skills-devshell";
-        envName = "agent-skills-nix-microsoft-skills-devshell";
-        packagePrefix = "agent-skill-";
-        sources = [
-          { source = skills-git; }
-          { source = skillspkgs-combinations.combinations.authoring; }
-        ];
-      };
+      # Root-side wiring for the runtime `skills-devshell/` sub-flake: the
+      # reconcile startup hook plus the repo-agnostic `skills`-category
+      # commands. The sub-flake is invoked by path at runtime, so its skill
+      # sources never enter this flake's input graph.
+      devshellSkills = agent-skill-flake.lib.devshellSkillsHook { };
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = import systems;
@@ -116,7 +76,7 @@
             }
           ) pins.repos;
 
-          # Build one skill via flake-skills.lib.mkSkillFlake and return
+          # Build one skill via agent-skill-flake.lib.mkSkillFlake and return
           # just the derivation (the lib also returns apps/install scaffolding
           # that this consumer-agnostic collection doesn't expose).
           mkOne =
@@ -125,12 +85,21 @@
               repoCfg = pins.repos.${pin.repo};
               repoSrc = repoSrcs.${pin.repo};
               skillSrc = "${repoSrc}/${pin.srcSubdir}";
-              flake = inputs.flake-skills.lib.mkSkillFlake {
+              flake = inputs.agent-skill-flake.lib.mkSkillFlake {
                 inherit (inputs) nixpkgs;
                 skillName = name;
                 src = skillSrc;
                 inherit (pin) description;
                 systems = [ system ];
+                # Hand the upstream repo coords to the builder so the package
+                # key's owner namespace (and the sentinel's provenance) resolve
+                # to the real source rather than erroring on a null owner; we
+                # consume only `packages.<system>.default` below, so the key
+                # itself is incidental, but a derivable owner keeps the build
+                # from a hard eval error.
+                source = {
+                  inherit (repoCfg) owner repo rev;
+                };
               };
             in
             (flake.packages.${system}.default).overrideAttrs (old: {
@@ -191,17 +160,16 @@
 
           # Auto-reconcile skills at project scope on `nix develop`: the
           # skills-git pack plus skillspkgs' curated `authoring` combination,
-          # merged into one combination that a single reconcile hook converges
-          # — one owner, declarative + idempotent.
+          # owned by the runtime `skills-devshell/` sub-flake and converged by
+          # its reconcile app — one owner, declarative + idempotent, invoked by
+          # path so its skill sources stay out of this flake's input graph.
           devshells.default = {
             name = "nix-microsoft-skills";
             motd = ''
               {bold}{14}nix-microsoft-skills{reset}
               Run {bold}menu{reset} to list available commands.
             '';
-            devshell.startup.install-skills.text = ''
-              ${devshellSkills.reconcileScript system}
-            '';
+            devshell.startup.install-skills.text = devshellSkills.startup;
             packages = [
               pkgs.gh
               pkgs.jq
@@ -231,7 +199,8 @@
                 help = "Compare pinned upstream revs to GitHub HEAD; pass --apply to rewrite";
                 command = "nix run .#bump -- \"$@\"";
               }
-            ];
+            ]
+            ++ devshellSkills.commands;
           };
 
           apps.bump = {
