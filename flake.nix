@@ -159,7 +159,7 @@
           };
 
           # Auto-reconcile skills at project scope on `nix develop`: the
-          # skills-git pack plus skillspkgs' curated `authoring` combination,
+          # git-skills pack plus skillspkgs' curated `authoring` combination,
           # owned by the runtime `skills-devshell/` sub-flake and converged by
           # its reconcile app — one owner, declarative + idempotent, invoked by
           # path so its skill sources stay out of this flake's input graph.
