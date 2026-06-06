@@ -14,13 +14,11 @@
     };
     systems.url = "github:nix-systems/default";
 
-    devshell = {
-      url = "github:numtide/devshell";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     # The skill builder library (zero skill inputs). Used both to BUILD this
-    # repo's own output skills (`lib.mkSkillFlake`) and to wire the root dev
-    # shell to the runtime `skills-devshell/` sub-flake (`lib.devshellSkillsHook`).
+    # repo's own output skills (`lib.mkSkillFlake`) and, via
+    # `flakeModules.devshellSkills`, to wire the root dev shell to the runtime
+    # `skills-devshell/` sub-flake. That module bundles numtide/devshell, so
+    # this flake needs no `devshell` input of its own.
     agent-skill-flake = {
       url = "github:nhooey/agent-skill-flake";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -35,22 +33,28 @@
     {
       flake-parts,
       systems,
-      agent-skill-flake,
       ...
     }@inputs:
-    let
-      # Root-side wiring for the runtime `skills-devshell/` sub-flake: the
-      # reconcile startup hook plus the repo-agnostic `skills`-category
-      # commands. The sub-flake is invoked by path at runtime, so its skill
-      # sources never enter this flake's input graph.
-      devshellSkills = agent-skill-flake.lib.devshellSkillsHook { };
-    in
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = import systems;
       imports = [
-        inputs.devshell.flakeModule
+        # Bundles numtide/devshell + the whole dev-shell skills convention
+        # (motd, install-skills startup, the ci/dev/maintenance command trio,
+        # and the reap-skills/update-skills-devshell pair). Configured via the
+        # `agent-skill-flake.devshellSkills` options block below.
+        inputs.agent-skill-flake.flakeModules.devshellSkills
         inputs.treefmt-nix.flakeModule
       ];
+
+      # nix-microsoft-skills keeps its custom motd ("Run menu …"); the module's
+      # generated banner is overridden by passing `motd` here.
+      agent-skill-flake.devshellSkills = {
+        name = "nix-microsoft-skills";
+        motd = ''
+          {bold}{14}nix-microsoft-skills{reset}
+          Run {bold}menu{reset} to list available commands.
+        '';
+      };
 
       perSystem =
         {
@@ -167,18 +171,13 @@
             programs.shfmt.enable = true;
           };
 
-          # Auto-reconcile skills at project scope on `nix develop`: the
-          # git-skills pack plus skillspkgs' curated `authoring` combination,
-          # owned by the runtime `skills-devshell/` sub-flake and converged by
-          # its reconcile app — one owner, declarative + idempotent, invoked by
-          # path so its skill sources stay out of this flake's input graph.
+          # The devshellSkills module (imported above) supplies this devShell's
+          # name, motd, the install-skills startup, the ci/dev/maintenance
+          # command trio (check / fmt / update-flake), and the skills commands
+          # (reap-skills / update-skills-devshell). Only nix-microsoft-skills'
+          # own packages and the deps/bump command are set here; both are list
+          # options, so they merge onto the module's rather than replacing them.
           devshells.default = {
-            name = "nix-microsoft-skills";
-            motd = ''
-              {bold}{14}nix-microsoft-skills{reset}
-              Run {bold}menu{reset} to list available commands.
-            '';
-            devshell.startup.install-skills.text = devshellSkills.startup;
             packages = [
               pkgs.gh
               pkgs.jq
@@ -188,28 +187,13 @@
               pkgs.python3
             ];
             commands = [
-              # ci
-              {
-                category = "ci";
-                name = "check";
-                help = "Run nix flake check (treefmt + skills-valid + per-skill builds)";
-                command = "nix flake check \"$@\"";
-              }
-              {
-                category = "ci";
-                name = "fmt";
-                help = "Format the tree via treefmt (nixfmt + shfmt)";
-                command = "nix fmt \"$@\"";
-              }
-              # deps
               {
                 category = "deps";
                 name = "bump";
                 help = "Compare pinned upstream revs to GitHub HEAD; pass --apply to rewrite";
                 command = "nix run .#bump -- \"$@\"";
               }
-            ]
-            ++ devshellSkills.commands;
+            ];
           };
 
           apps.bump = {
