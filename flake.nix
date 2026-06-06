@@ -99,6 +99,14 @@
                 src = skillSrc;
                 inherit (pin) description;
                 systems = [ system ];
+                # Namespace the package key by this repo's curation identity
+                # (`agent-skill-nhooey-microsoft-<name>`) rather than the upstream
+                # author. These are nhooey's curated Microsoft/.NET skills; the
+                # only significant token in the repo name is `microsoft`, so the
+                # per-skill keys read `nhooey-microsoft` uniformly instead of
+                # scattering across each upstream owner. `source` still feeds the
+                # homepage/provenance below.
+                namespaceFn = _: "nhooey-microsoft";
                 # Hand the upstream repo coords to the builder so the lib can
                 # derive the owner-namespaced package key
                 # (`agent-skill-<owner>-<name>`) we pick up below.
@@ -133,7 +141,7 @@
           );
 
           all = pkgs.symlinkJoin {
-            name = "agent-skills-nix-microsoft-skills-all";
+            name = "agent-skills-nhooey-microsoft-all";
             paths = lib.attrValues skillDrvs;
           };
 
@@ -159,7 +167,7 @@
         in
         {
           packages = skillDrvs // {
-            agent-skills-nix-microsoft-skills-all = all;
+            agent-skills-nhooey-microsoft-all = all;
             default = all;
           };
 
