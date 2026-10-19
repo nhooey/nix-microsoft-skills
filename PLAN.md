@@ -76,9 +76,6 @@ These are sourced from currently loaded skills. The implementing agent should re
 **From `github-policy-protect-default-branch`** (applied once the repo exists):
 - Apply a Rulesets-API ruleset to the default branch: require PR, required status checks, block force-push, block deletion, apply to admins.
 
-**From `nix-garnix-ci`** (applied for CI):
-- Wire Garnix to build `packages.*` and run `checks.*` per push. `garnix.yaml` scope covers `x86_64-linux` and `aarch64-darwin` at minimum; add others only if `flake-skills` already does.
-
 Skills inspected but **not used** because they don't apply here: `nix-java`, `nix-clojure` (no JVM / Clojure content); `github-pull-request-stacked` (no dependent-PR chain in v1); `github-policy-codeowners` (single-maintainer for now — wire later if collaborators land).
 
 ## Required flake outputs
@@ -161,7 +158,6 @@ nix-microsoft-skills/
 ├── PLAN.md                      # this file
 ├── README.md                    # short: what + how downstreams consume it + how to bump
 ├── .gitignore                   # anchored, narrow, no editor cruft
-├── garnix.yaml                  # CI config per nix-garnix-ci
 ├── skills/
 │   └── default.nix              # single source of truth — attrset of 10 pins
 └── scripts/
@@ -176,7 +172,7 @@ nix-microsoft-skills/
 4. `treefmt` reports no drift.
 5. `nix run .#bump` (read-only) runs to completion against all unique upstream repos and prints either `up to date` or a delta per repo, without modifying any file.
 6. `nix run .#bump -- --apply` on a deliberately-stale pin produces exactly one commit per upstream repo, with a Conventional-Commits-style subject and a body that explains the bump.
-7. Garnix CI is green on the first push.
+7. `nix flake check` passes on the first push.
 8. The default branch ruleset (per `github-policy-protect-default-branch`) is in place before opening the repo to PRs.
 
 Stop at the first failed check, fix the root cause, re-run from #1.
@@ -192,11 +188,11 @@ Stop at the first failed check, fix the root cause, re-run from #1.
 ## First moves for the implementing agent
 
 1. Clone or visit `nhooey/flake-skills`. Identify the public API for declaring a skill package. Anchor every later step to whatever it provides.
-2. Set up the empty repo skeleton: `flake.nix` (inputs only — `nixpkgs`, `flake-parts`, `systems`, `flake-skills`, `treefmt-nix`, alphabetical after the first three), `.gitignore`, `garnix.yaml`, `treefmt` config. Confirm `nix flake check` is green on the empty shell.
+2. Set up the empty repo skeleton: `flake.nix` (inputs only — `nixpkgs`, `flake-parts`, `systems`, `flake-skills`, `treefmt-nix`, alphabetical after the first three), `.gitignore`, `treefmt` config. Confirm `nix flake check` is green on the empty shell.
 3. Pin upstream HEADs into `skills/default.nix` by running `gh api repos/<owner>/<repo>/commits/main` for the three unique upstream repos (one call covers all eight `wshaddix` skills).
 4. Build a single skill end-to-end first — `dotnet-xunit` is a good probe (small, top-level, no surprise paths). Get `nix build .#dotnet-xunit` green before expanding to the others.
 5. Add the remaining nine. Add `all`. Add `checks.skills-valid`. Add `apps.bump` (read-only mode first; `--apply` second).
-6. Wire Garnix. Apply the default-branch ruleset. Open the repo for PRs.
+6. Apply the default-branch ruleset. Open the repo for PRs.
 7. Submit the collection to `skillspkgs` per whatever inclusion process that repo documents.
 
 Do not skip the single-skill probe in step 4. Getting `mkSkill` (or the equivalent) right once saves debugging it ten times.

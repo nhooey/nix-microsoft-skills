@@ -1,7 +1,5 @@
 # nix-microsoft-skills
 
-[![built with garnix](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Fgarnix.io%2Fapi%2Fbadges%2Fnhooey%2Fnix-microsoft-skills)](https://garnix.io/repo/nhooey/nix-microsoft-skills)
-
 Ten community [Claude Code agent skills][skills] targeting the
 Microsoft / .NET stack, packaged as a Nix flake. Built on
 [`nhooey/agent-skill-flake`][agent-skill-flake]; intended for inclusion in
