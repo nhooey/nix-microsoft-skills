@@ -67,8 +67,8 @@ These are sourced from currently loaded skills. The implementing agent should re
 - Subject ≤ 72 chars, blank line, body wrapped at 72 cols, explain WHY not what.
 - Cap body at ~4 paragraphs.
 
-**From `git-hygiene-no-history-in-code`** (applied to any in-repo comments):
-- No diachronic notes ("added in v2", "TODO remove after Q3"). That belongs in the commit message.
+**From `git-hygiene-no-history-in-tracked-files`** (applied to every tracked file: code comments, READMEs and docs, skills, plans, config):
+- No diachronic notes ("added in v2", "TODO remove after Q3", "changed from X to Y"). That belongs in the commit message. Files that exist to record history, such as a CHANGELOG, are the exception.
 
 **From `git-hygiene-gitignore`** (applied to `.gitignore`):
 - Anchor patterns with `/` when they apply at one path only. Editor/personal junk belongs in `~/.gitignore_global`, not here.
