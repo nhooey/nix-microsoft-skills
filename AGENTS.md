@@ -1,0 +1,22 @@
+# Agent instructions for nix-microsoft-skills
+
+A Nix flake packaging ten community Claude Code skills for the
+Microsoft / .NET stack, one package per skill plus `all`. It builds on
+`nhooey/agent-skill-flake` and is meant for inclusion in
+`nhooey/skillspkgs`; installing the skills is the consumer's job, not
+this repository's.
+
+- `skills/default.nix` holds every upstream pin, in one attrset.
+- `scripts/check-skills.py` validates the built skills for the
+  `skills-valid` check; `scripts/bump.sh` backs `nix run .#bump`.
+- `skills-devshell/` is a separate sub-flake holding the skills the dev
+  shell installs into `.agents/skills/`; it is never a root input.
+
+## Build and test
+
+- `nix develop` enters the dev shell and installs its skills.
+- `nix flake check` builds every skill, validates them (`skills-valid`)
+  and checks formatting (`treefmt`). It must pass before a change merges.
+- `nix fmt` formats the tree.
+- `nix run .#bump` compares the pinned upstream revisions with GitHub;
+  `nix run .#bump -- --apply` bumps them, one commit per upstream repo.
