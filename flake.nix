@@ -49,8 +49,8 @@
         inputs.treefmt-nix.flakeModule
       ];
 
-      # nix-microsoft-skills keeps its custom motd ("Run menu …"); the module's
-      # generated banner is overridden by passing `motd` here.
+      # Passing `motd` replaces the module's generated banner with a short
+      # one that points at `menu`.
       agent-skill-flake.devshellSkills = {
         name = "nix-microsoft-skills";
         motd = ''
