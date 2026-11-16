@@ -96,6 +96,10 @@ class ParseFrontmatterScalars(unittest.TestCase):
     def test_comment_alone_after_key_is_an_empty_value(self):
         self.assertIsNone(fields("---\nname: demo\ndescription: # none\n---\n")["description"])
 
+    def test_space_before_the_colon(self):
+        text = "---\nname : demo\ndescription:\td\n---\n"
+        self.assertEqual(fields(text), {"name": "demo", "description": "d"})
+
     def test_crlf_line_endings(self):
         text = "---\r\nname: demo\r\ndescription: one\r\n  two\r\n---\r\n\r\n# Body\r\n"
         self.assertEqual(fields(text), {"name": "demo", "description": "one two"})

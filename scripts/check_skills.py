@@ -35,7 +35,7 @@ from typing import Mapping, Tuple, Union
 
 
 FRONTMATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)\n?^---[ \t]*$", re.DOTALL | re.MULTILINE)
-KEY_RE = re.compile(r"\A([A-Za-z0-9_][A-Za-z0-9_.-]*):(?:[ \t]+(.*))?\Z")
+KEY_RE = re.compile(r"\A([A-Za-z0-9_][A-Za-z0-9_.-]*)[ \t]*:(?:[ \t]+(.*))?\Z")
 BLOCK_RE = re.compile(r"\A([|>])([+-]?)[1-9]?([+-]?)[ \t]*(?:#.*)?\Z")
 # A quoted scalar, then optionally a comment, which needs a space before `#`.
 DOUBLE_QUOTED_RE = re.compile(r'\A"((?:[^"\\]|\\.)*)"(?:[ \t]+#.*)?[ \t]*\Z', re.DOTALL)
