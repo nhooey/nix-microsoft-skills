@@ -164,8 +164,21 @@
                 touch $out
               '';
 
+          # The repository's own commands as one tool, on the dev shell's PATH.
+          skills-dev = pkgs.writeShellApplication {
+            name = "skills-dev";
+            runtimeInputs = [
+              pkgs.git
+              pkgs.python3
+            ];
+            text = ''
+              exec python3 ${./scripts/skills_dev.py} "$@"
+            '';
+          };
+
           # Unit tests for the scripts' pure cores, plus the pin rewrite run
-          # against the real skills/default.nix.
+          # against the real skills/default.nix, and the packaged skills-dev
+          # answering --help.
           scriptsTests =
             pkgs.runCommand "scripts-tests"
               {
@@ -181,6 +194,7 @@
               ''
                 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
                   --start-directory "$src/scripts/tests" --verbose
+                ${lib.getExe skills-dev} --help >/dev/null
                 touch $out
               '';
         in
@@ -206,7 +220,7 @@
           # name, motd, the install-skills startup, the ci/dev/maintenance
           # command trio (check / fmt / update-flake), and the skills commands
           # (reap-skills / update-skills-devshell). Only nix-microsoft-skills'
-          # own packages and the deps/bump command are set here; both are list
+          # own packages and its skills-dev tool are set here; both are list
           # options, so they merge onto the module's rather than replacing them.
           devshells.default = {
             packages = [
@@ -219,10 +233,10 @@
             ];
             commands = [
               {
-                category = "deps";
-                name = "bump";
-                help = "Compare pinned upstream revs to GitHub HEAD; pass --apply to rewrite";
-                command = "nix run .#bump -- \"$@\"";
+                category = "dev";
+                name = "skills-dev";
+                help = "build: build skill packages; test: run the scripts' unit tests; bump: compare pins with GitHub (--apply rewrites)";
+                package = skills-dev;
               }
             ];
           };

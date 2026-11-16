@@ -34,7 +34,7 @@ pins_file=$repo_root/skills/default.nix
 
 if [[ ! -f $pins_file ]]; then
   echo "pins file not found: $pins_file" >&2
-  echo 'run `nix run .#bump` from a clone of nix-microsoft-skills' >&2
+  echo 'run `skills-dev bump` from a clone of nix-microsoft-skills' >&2
   exit 1
 fi
 
