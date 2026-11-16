@@ -25,7 +25,6 @@ as they would be (or would change the value) under a full YAML parser.
 """
 
 import itertools
-import json
 import os
 import re
 import sys
@@ -40,6 +39,32 @@ BLOCK_RE = re.compile(r"\A([|>])([+-]?)[1-9]?([+-]?)[ \t]*(?:#.*)?\Z")
 # A quoted scalar, then optionally a comment, which needs a space before `#`.
 DOUBLE_QUOTED_RE = re.compile(r'\A"((?:[^"\\]|\\.)*)"(?:[ \t]+#.*)?[ \t]*\Z', re.DOTALL)
 SINGLE_QUOTED_RE = re.compile(r"\A'((?:[^']|'')*)'(?:[ \t]+#.*)?[ \t]*\Z", re.DOTALL)
+# YAML's double-quoted escapes: \xXX, \uXXXX, \UXXXXXXXX and the one-character ones.
+ESCAPE_RE = re.compile(
+    r"\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}|.)", re.DOTALL
+)
+ESCAPES = MappingProxyType(
+    {
+        "0": "\0",
+        "a": "\a",
+        "b": "\b",
+        "t": "\t",
+        "\t": "\t",
+        "n": "\n",
+        "v": "\v",
+        "f": "\f",
+        "r": "\r",
+        "e": "\x1b",
+        " ": " ",
+        '"': '"',
+        "/": "/",
+        "\\": "\\",
+        "N": "\x85",
+        "_": "\xa0",
+        "L": " ",
+        "P": " ",
+    }
+)
 
 
 class NonScalar:
@@ -102,14 +127,21 @@ def block_scalar(style, chomp, lines):
     return text + "\n"
 
 
+def unescape(match):
+    """The character one YAML double-quoted escape stands for, or None."""
+    code = match.group(1)
+    if len(code) == 1:
+        return ESCAPES.get(code)
+    point = int(code[1:], 16)
+    return chr(point) if point <= sys.maxunicode else None
+
+
 def double_quoted(lineno, raw):
     match = DOUBLE_QUOTED_RE.match(raw)
-    try:
-        if match:
-            return json.loads(f'"{match.group(1)}"')
-    except ValueError:
-        pass
-    return Invalid((f"line {lineno}: double-quoted scalar doesn't parse: {raw!r}",))
+    escapes = tuple(ESCAPE_RE.finditer(match.group(1))) if match else ()
+    if not match or any(unescape(e) is None for e in escapes):
+        return Invalid((f"line {lineno}: double-quoted scalar doesn't parse: {raw!r}",))
+    return ESCAPE_RE.sub(unescape, match.group(1))
 
 
 def single_quoted(lineno, raw):

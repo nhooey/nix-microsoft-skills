@@ -46,6 +46,14 @@ class ParseFrontmatterScalars(unittest.TestCase):
         text = '---\nname: "demo"\ndescription: "Say \\"hi\\": now"\n---\n'
         self.assertEqual(fields(text)["description"], 'Say "hi": now')
 
+    def test_double_quoted_scalar_with_yaml_only_escapes(self):
+        text = '---\nname: demo\ndescription: "\\x41\\_B\\e\\U0001F600 \\/"\n---\n'
+        self.assertEqual(fields(text)["description"], "A B\x1b\U0001F600 /")
+
+    def test_double_quoted_scalar_with_literal_tab(self):
+        text = '---\nname: demo\ndescription: "a\tb"\n---\n'
+        self.assertEqual(fields(text)["description"], "a\tb")
+
     def test_single_quoted_scalar_with_doubled_quote(self):
         text = "---\nname: 'demo'\ndescription: 'it''s: fine'\n---\n"
         self.assertEqual(fields(text)["description"], "it's: fine")
@@ -127,6 +135,18 @@ class ParseFrontmatterRejects(unittest.TestCase):
     def test_unterminated_double_quote(self):
         (problem,) = problems('---\nname: "demo\ndescription: d\n---\n')
         self.assertIn("line 2: double-quoted scalar doesn't parse", problem)
+
+    def test_unknown_double_quoted_escape(self):
+        (problem,) = problems('---\nname: demo\ndescription: "a\\qb"\n---\n')
+        self.assertIn("line 3: double-quoted scalar doesn't parse", problem)
+
+    def test_escape_beyond_unicode(self):
+        (problem,) = problems('---\nname: demo\ndescription: "\\UFFFFFFFF"\n---\n')
+        self.assertIn("line 3: double-quoted scalar doesn't parse", problem)
+
+    def test_short_hex_escape(self):
+        (problem,) = problems('---\nname: demo\ndescription: "a\\x4"\n---\n')
+        self.assertIn("line 3: double-quoted scalar doesn't parse", problem)
 
     def test_unterminated_single_quote(self):
         (problem,) = problems("---\nname: 'demo\ndescription: d\n---\n")
