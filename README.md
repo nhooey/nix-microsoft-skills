@@ -62,13 +62,19 @@ into `~/.claude/skills/`, activation hooks, `home-manager` modules — is
 
 ## Bumping
 
-```sh
-nix run .#bump            # dry run — prints per-repo status
-nix run .#bump -- --apply # bumps every behind repo, one commit each
-```
+In the dev shell, `skills-dev bump` prints each upstream repo's status
+against GitHub, and `skills-dev bump --apply` bumps every behind repo,
+one commit each. Outside it, `nix run .#bump` does the same.
 
 `bump` groups by upstream repo so all seven `wshaddix/dotnet-skills`
 skills refresh together on one commit, not seven.
+
+## Development
+
+`nix develop` enters the dev shell; `menu` lists its commands. `check`
+runs `nix flake check`, `fmt` formats the tree, and `skills-dev` builds
+skills (`build`), runs the scripts' unit tests (`test`) and bumps the
+pins (`bump`). `skills-dev --help` lists its commands and options.
 
 ## License
 
