@@ -1,7 +1,8 @@
 # Agent instructions for nix-microsoft-skills
 
 A Nix flake packaging ten community Claude Code skills for the
-Microsoft / .NET stack, one package per skill plus `all`. It builds on
+Microsoft / .NET stack: `agent-skill-nhooey-microsoft-<skill>` per
+skill, plus `agent-skills-nhooey-microsoft-all` (the default). It builds on
 `nhooey/agent-skill-flake` and is meant for inclusion in
 `nhooey/skillspkgs`; installing the skills is the consumer's job, not
 this repository's.
