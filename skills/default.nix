@@ -2,7 +2,7 @@
 #
 # Shape:
 #   repos.<key>  = { owner; repo; rev; hash; defaultBranch; }
-#                  — fetched once per (rev, hash) so 8 wshaddix skills
+#                  — fetched once per (rev, hash) so the 7 wshaddix skills
 #                    share one tarball.
 #   skills.<name> = { repo; srcSubdir; description; }
 #                  — `repo` is a key into `repos`.

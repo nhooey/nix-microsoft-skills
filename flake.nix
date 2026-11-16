@@ -85,7 +85,7 @@
 
           # Build one skill via agent-skill-flake.lib.mkSkillFlake and return
           # a { key; drv; } pair where `key` is the lib's own namespaced
-          # attribute key (agent-skill-<owner>-<name>) so downstream
+          # attribute key (agent-skill-nhooey-microsoft-<name>) so downstream
           # aggregators see a consistent prefix and bare names never leak.
           mkOne =
             name: pin:
@@ -107,15 +107,14 @@
                 # scattering across each upstream owner. `source` still feeds the
                 # homepage/provenance below.
                 namespaceFn = _: "nhooey-microsoft";
-                # Hand the upstream repo coords to the builder so the lib can
-                # derive the owner-namespaced package key
-                # (`agent-skill-<owner>-<name>`) we pick up below.
+                # Hand the upstream repo coords to the builder for provenance;
+                # `namespaceFn` above ignores them when naming the key.
                 source = {
                   inherit (repoCfg) owner repo rev;
                 };
               };
               # The lib hands back its canonical namespaced key
-              # (agent-skill-<owner>-<name>) as `passthru.packageKey`, so we
+              # (agent-skill-nhooey-microsoft-<name>) as `passthru.packageKey`, so we
               # re-key by it directly instead of rediscovering the convention.
               base = flake.packages.${system}.default;
             in
@@ -146,7 +145,7 @@
           };
 
           # Asserts the aggregate shape that every downstream relies on:
-          # 10 directories, each with a top-level SKILL.md whose YAML
+          # one directory per pinned skill, each with a top-level SKILL.md whose YAML
           # frontmatter parses, carries `name:`, and matches the directory.
           # Silent corruption is worse than a noisy failure here.
           skillsValid =
