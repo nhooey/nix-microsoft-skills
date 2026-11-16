@@ -49,8 +49,8 @@
         inputs.treefmt-nix.flakeModule
       ];
 
-      # nix-microsoft-skills keeps its custom motd ("Run menu …"); the module's
-      # generated banner is overridden by passing `motd` here.
+      # Passing `motd` replaces the module's generated banner with a short
+      # one that points at `menu`.
       agent-skill-flake.devshellSkills = {
         name = "nix-microsoft-skills";
         motd = ''
@@ -85,7 +85,7 @@
 
           # Build one skill via agent-skill-flake.lib.mkSkillFlake and return
           # a { key; drv; } pair where `key` is the lib's own namespaced
-          # attribute key (agent-skill-<owner>-<name>) so downstream
+          # attribute key (agent-skill-nhooey-microsoft-<name>) so downstream
           # aggregators see a consistent prefix and bare names never leak.
           mkOne =
             name: pin:
@@ -107,15 +107,14 @@
                 # scattering across each upstream owner. `source` still feeds the
                 # homepage/provenance below.
                 namespaceFn = _: "nhooey-microsoft";
-                # Hand the upstream repo coords to the builder so the lib can
-                # derive the owner-namespaced package key
-                # (`agent-skill-<owner>-<name>`) we pick up below.
+                # Hand the upstream repo coords to the builder for provenance;
+                # `namespaceFn` above ignores them when naming the key.
                 source = {
                   inherit (repoCfg) owner repo rev;
                 };
               };
               # The lib hands back its canonical namespaced key
-              # (agent-skill-<owner>-<name>) as `passthru.packageKey`, so we
+              # (agent-skill-nhooey-microsoft-<name>) as `passthru.packageKey`, so we
               # re-key by it directly instead of rediscovering the convention.
               base = flake.packages.${system}.default;
             in
@@ -146,7 +145,7 @@
           };
 
           # Asserts the aggregate shape that every downstream relies on:
-          # 10 directories, each with a top-level SKILL.md whose YAML
+          # one directory per pinned skill, each with a top-level SKILL.md whose YAML
           # frontmatter parses, carries `name:`, and matches the directory.
           # Silent corruption is worse than a noisy failure here.
           skillsValid =
@@ -158,10 +157,44 @@
                 expected = lib.concatStringsSep "\n" (lib.attrNames pins.skills);
               }
               ''
-                python3 ${./scripts/check-skills.py} \
+                python3 ${./scripts/check_skills.py} \
                   "$all/share/claude-skills" \
                   "$expectedCount" \
                   <(printf '%s\n' "$expected" | sort)
+                touch $out
+              '';
+
+          # The repository's own commands as one tool, on the dev shell's PATH.
+          skills-dev = pkgs.writeShellApplication {
+            name = "skills-dev";
+            runtimeInputs = [
+              pkgs.git
+              pkgs.python3
+            ];
+            text = ''
+              exec python3 ${./scripts/skills_dev.py} "$@"
+            '';
+          };
+
+          # Unit tests for the scripts' pure cores, plus the pin rewrite run
+          # against the real skills/default.nix, and the packaged skills-dev
+          # answering --help.
+          scriptsTests =
+            pkgs.runCommand "scripts-tests"
+              {
+                nativeBuildInputs = [ pkgs.python3 ];
+                src = lib.fileset.toSource {
+                  root = ./.;
+                  fileset = lib.fileset.unions [
+                    ./scripts
+                    ./skills/default.nix
+                  ];
+                };
+              }
+              ''
+                PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+                  --start-directory "$src/scripts/tests" --verbose
+                ${lib.getExe skills-dev} --help >/dev/null
                 touch $out
               '';
         in
@@ -173,6 +206,7 @@
 
           checks = {
             skills-valid = skillsValid;
+            scripts-tests = scriptsTests;
           }
           // (lib.mapAttrs' (n: v: lib.nameValuePair "skill-${n}" v) skillDrvs);
 
@@ -186,7 +220,7 @@
           # name, motd, the install-skills startup, the ci/dev/maintenance
           # command trio (check / fmt / update-flake), and the skills commands
           # (reap-skills / update-skills-devshell). Only nix-microsoft-skills'
-          # own packages and the deps/bump command are set here; both are list
+          # own packages and its skills-dev tool are set here; both are list
           # options, so they merge onto the module's rather than replacing them.
           devshells.default = {
             packages = [
@@ -199,10 +233,10 @@
             ];
             commands = [
               {
-                category = "deps";
-                name = "bump";
-                help = "Compare pinned upstream revs to GitHub HEAD; pass --apply to rewrite";
-                command = "nix run .#bump -- \"$@\"";
+                category = "dev";
+                name = "skills-dev";
+                help = "build: build skill packages; test: run the scripts' unit tests; bump: compare pins with GitHub (--apply rewrites)";
+                package = skills-dev;
               }
             ];
           };
@@ -221,7 +255,7 @@
                   pkgs.nix
                 ];
                 text = ''
-                  exec bash ${./scripts/bump.sh} "$@"
+                  exec bash ${./scripts}/bump.sh "$@"
                 '';
               }
               + "/bin/bump"

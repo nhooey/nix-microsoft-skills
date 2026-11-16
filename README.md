@@ -14,7 +14,7 @@ Downstreams decide how to install them.
 
 ## The 10 skills
 
-| Output name | Upstream |
+| Skill | Upstream |
 |---|---|
 | `csharp-concurrency-patterns` | `wshaddix/dotnet-skills` |
 | `dotnet-csharp-async-patterns` | `wshaddix/dotnet-skills` |
@@ -27,8 +27,9 @@ Downstreams decide how to install them.
 | `avalonia-dev-review` | `peterblazejewicz/claude-plugins` |
 | `frontend-ui-engineering-avalonia` | `peterblazejewicz/claude-plugins` |
 
-All pins live in [`skills/default.nix`](skills/default.nix) — one
-attrset, one source of truth.
+Each skill's package is `agent-skill-nhooey-microsoft-<skill>`. All pins
+live in [`skills/default.nix`](skills/default.nix) — one attrset, one
+source of truth.
 
 ## Consuming
 
@@ -43,11 +44,13 @@ attrset, one source of truth.
 Exposed outputs (per system):
 
 ```text
-packages.${system}.<skill-name>     # one derivation per skill (10 total)
-packages.${system}.all              # all 10 together (symlinkJoin)
-packages.${system}.default          = all
-checks.${system}.treefmt
+packages.${system}.agent-skill-nhooey-microsoft-<skill>   # one per skill (10 total)
+packages.${system}.agent-skills-nhooey-microsoft-all     # all 10 together (symlinkJoin)
+packages.${system}.default                               = agent-skills-nhooey-microsoft-all
+checks.${system}.skill-agent-skill-nhooey-microsoft-<skill>  # each skill builds
 checks.${system}.skills-valid
+checks.${system}.treefmt
+formatter.${system}                                      # treefmt (nixfmt + shfmt)
 devShells.${system}.default
 apps.${system}.bump
 ```
@@ -59,13 +62,19 @@ into `~/.claude/skills/`, activation hooks, `home-manager` modules — is
 
 ## Bumping
 
-```sh
-nix run .#bump            # dry run — prints per-repo status
-nix run .#bump -- --apply # bumps every behind repo, one commit each
-```
+In the dev shell, `skills-dev bump` prints each upstream repo's status
+against GitHub, and `skills-dev bump --apply` bumps every behind repo,
+one commit each. Outside it, `nix run .#bump` does the same.
 
-`bump` groups by upstream repo so all eight `wshaddix/dotnet-skills`
-skills refresh together on one commit, not eight.
+`bump` groups by upstream repo so all seven `wshaddix/dotnet-skills`
+skills refresh together on one commit, not seven.
+
+## Development
+
+`nix develop` enters the dev shell; `menu` lists its commands. `check`
+runs `nix flake check`, `fmt` formats the tree, and `skills-dev` builds
+skills (`build`), runs the scripts' unit tests (`test`) and bumps the
+pins (`bump`). `skills-dev --help` lists its commands and options.
 
 ## License
 
