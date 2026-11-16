@@ -4,12 +4,12 @@ state: implemented
 kind: implementation
 part-of: microsoft-skills-collection
 implemented-by: ab42396
-touches: [flake.nix, scripts/check-skills.py]
+touches: [flake.nix, scripts/check_skills.py]
 ---
 
 # `skills-valid` check on the aggregate
 
-`checks.skills-valid` runs `scripts/check-skills.py` over
+`checks.skills-valid` runs `scripts/check_skills.py` over
 `agent-skills-nhooey-microsoft-all` and fails the build unless:
 
 1. `share/claude-skills/` holds exactly one directory per pinned skill;
