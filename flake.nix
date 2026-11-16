@@ -157,10 +157,26 @@
                 expected = lib.concatStringsSep "\n" (lib.attrNames pins.skills);
               }
               ''
-                python3 ${./scripts/check-skills.py} \
+                python3 ${./scripts/check_skills.py} \
                   "$all/share/claude-skills" \
                   "$expectedCount" \
                   <(printf '%s\n' "$expected" | sort)
+                touch $out
+              '';
+
+          # Unit tests for the scripts' pure cores.
+          scriptsTests =
+            pkgs.runCommand "scripts-tests"
+              {
+                nativeBuildInputs = [ pkgs.python3 ];
+                src = lib.fileset.toSource {
+                  root = ./.;
+                  fileset = ./scripts;
+                };
+              }
+              ''
+                PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+                  --start-directory "$src/scripts/tests" --verbose
                 touch $out
               '';
         in
@@ -172,6 +188,7 @@
 
           checks = {
             skills-valid = skillsValid;
+            scripts-tests = scriptsTests;
           }
           // (lib.mapAttrs' (n: v: lib.nameValuePair "skill-${n}" v) skillDrvs);
 
