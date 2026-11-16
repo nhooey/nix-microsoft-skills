@@ -153,7 +153,7 @@ def parse_entry(entry):
 
 def parse_frontmatter(text):
     """Parsed fields of a SKILL.md's frontmatter, or Invalid with the reasons."""
-    match = FRONTMATTER_RE.match(text)
+    match = FRONTMATTER_RE.match(text.replace("\r\n", "\n"))
     if not match:
         return Invalid(("no frontmatter block between `---` lines",))
     numbered = tuple(enumerate(match.group(1).split("\n"), start=2))

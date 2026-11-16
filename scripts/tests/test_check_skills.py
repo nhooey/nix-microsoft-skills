@@ -85,6 +85,10 @@ class ParseFrontmatterScalars(unittest.TestCase):
         text = "---\n# leading\nname: demo\n# between\ndescription: d\n---\n"
         self.assertEqual(fields(text), {"name": "demo", "description": "d"})
 
+    def test_crlf_line_endings(self):
+        text = "---\r\nname: demo\r\ndescription: one\r\n  two\r\n---\r\n\r\n# Body\r\n"
+        self.assertEqual(fields(text), {"name": "demo", "description": "one two"})
+
 
 class ParseFrontmatterRejects(unittest.TestCase):
     def test_no_frontmatter(self):
