@@ -49,6 +49,7 @@ packages.${system}.agent-skills-nhooey-microsoft-all     # all 10 together (syml
 packages.${system}.default                               = agent-skills-nhooey-microsoft-all
 checks.${system}.skill-agent-skill-nhooey-microsoft-<skill>  # each skill builds
 checks.${system}.skills-valid
+checks.${system}.scripts-tests                           # unit tests of scripts/
 checks.${system}.treefmt
 formatter.${system}                                      # treefmt (nixfmt + shfmt)
 devShells.${system}.default
