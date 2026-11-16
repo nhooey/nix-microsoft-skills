@@ -9,8 +9,9 @@ this repository's.
 
 - `skills/default.nix` holds every upstream pin, in one attrset.
 - `scripts/check_skills.py` validates the built skills for the
-  `skills-valid` check; `scripts/bump.sh` backs `nix run .#bump`.
-- `scripts/tests/` holds `unittest` tests of the scripts' pure
+  `skills-valid` check; `scripts/bump.sh` backs `nix run .#bump` and
+  rewrites pins through `scripts/rewrite_pin.py`.
+- `scripts/tests/` holds `unittest` tests of those scripts' pure
   functions. `nix flake check` runs them (`scripts-tests`); run them
   directly with `python3 -m unittest discover -s scripts/tests`.
 - `skills-devshell/` is a separate sub-flake holding the skills the dev

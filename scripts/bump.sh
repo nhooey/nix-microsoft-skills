@@ -7,6 +7,8 @@
 
 set -euo pipefail
 
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
 apply=0
 case "${1:-}" in
 --apply) apply=1 ;;
@@ -80,39 +82,10 @@ for key in $repo_keys; do
       "github:$owner/$repo/$new_rev" --json --refresh)
     new_hash=$(jq -r .hash <<<"$prefetch_json")
 
-    # In-place rewrite. The pins file's shape per repo block is:
-    #   <key> = {
-    #     owner = "...";
-    #     repo  = "...";
-    #     rev   = "<sha>";
-    #     hash  = "sha256-...";
-    #     ...
-    #   };
-    # Rewriting just the rev / hash lines within the `<key> = { ... }`
-    # block scopes the substitution; a global s/// would clobber any
-    # other pin that happened to share the same old rev/hash.
-    python3 - "$pins_file" "$key" "$old_rev" "$new_rev" "$old_hash" "$new_hash" <<'PY'
-import re, sys
-path, key, old_rev, new_rev, old_hash, new_hash = sys.argv[1:7]
-with open(path) as fh:
-    src = fh.read()
-pat = re.compile(
-    r'(' + re.escape(key) + r'\s*=\s*\{[^}]*?)'
-    + r'(rev\s*=\s*")' + re.escape(old_rev) + r'(")'
-    + r'([^}]*?)'
-    + r'(hash\s*=\s*")' + re.escape(old_hash) + r'(")',
-    re.DOTALL,
-)
-new, n = pat.subn(
-    lambda m: f'{m.group(1)}{m.group(2)}{new_rev}{m.group(3)}{m.group(4)}{m.group(5)}{new_hash}{m.group(6)}',
-    src,
-    count=1,
-)
-if n != 1:
-    sys.exit(f"rewrite failed for {key}: matched {n} times")
-with open(path, "w") as fh:
-    fh.write(new)
-PY
+    # Rewrites only the rev / hash lines inside this repo's `<key> = { ... }`
+    # block; see rewrite_pin.py.
+    python3 "$script_dir/rewrite_pin.py" \
+      "$pins_file" "$key" "$old_rev" "$new_rev" "$old_hash" "$new_hash"
 
     # Commit per repo, listing affected skills in the body so the
     # diff stays a one-line rev change but the impact is recoverable

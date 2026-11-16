@@ -164,14 +164,18 @@
                 touch $out
               '';
 
-          # Unit tests for the scripts' pure cores.
+          # Unit tests for the scripts' pure cores, plus the pin rewrite run
+          # against the real skills/default.nix.
           scriptsTests =
             pkgs.runCommand "scripts-tests"
               {
                 nativeBuildInputs = [ pkgs.python3 ];
                 src = lib.fileset.toSource {
                   root = ./.;
-                  fileset = ./scripts;
+                  fileset = lib.fileset.unions [
+                    ./scripts
+                    ./skills/default.nix
+                  ];
                 };
               }
               ''
@@ -237,7 +241,7 @@
                   pkgs.nix
                 ];
                 text = ''
-                  exec bash ${./scripts/bump.sh} "$@"
+                  exec bash ${./scripts}/bump.sh "$@"
                 '';
               }
               + "/bin/bump"
