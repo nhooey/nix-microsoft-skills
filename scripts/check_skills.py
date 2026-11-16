@@ -37,6 +37,9 @@ from typing import Mapping, Tuple, Union
 FRONTMATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)\n?^---[ \t]*$", re.DOTALL | re.MULTILINE)
 KEY_RE = re.compile(r"\A([A-Za-z0-9_][A-Za-z0-9_.-]*):(?:[ \t]+(.*))?\Z")
 BLOCK_RE = re.compile(r"\A([|>])([+-]?)[1-9]?([+-]?)[ \t]*(?:#.*)?\Z")
+# A quoted scalar, then optionally a comment, which needs a space before `#`.
+DOUBLE_QUOTED_RE = re.compile(r'\A"((?:[^"\\]|\\.)*)"(?:[ \t]+#.*)?[ \t]*\Z', re.DOTALL)
+SINGLE_QUOTED_RE = re.compile(r"\A'((?:[^']|'')*)'(?:[ \t]+#.*)?[ \t]*\Z", re.DOTALL)
 
 
 class NonScalar:
@@ -100,17 +103,20 @@ def block_scalar(style, chomp, lines):
 
 
 def double_quoted(lineno, raw):
+    match = DOUBLE_QUOTED_RE.match(raw)
     try:
-        return json.loads(raw)
+        if match:
+            return json.loads(f'"{match.group(1)}"')
     except ValueError:
-        return Invalid((f"line {lineno}: double-quoted scalar doesn't parse: {raw!r}",))
+        pass
+    return Invalid((f"line {lineno}: double-quoted scalar doesn't parse: {raw!r}",))
 
 
 def single_quoted(lineno, raw):
-    inner = raw[1:-1]
-    if len(raw) < 2 or not raw.endswith("'") or "'" in inner.replace("''", ""):
+    match = SINGLE_QUOTED_RE.match(raw)
+    if not match:
         return Invalid((f"line {lineno}: single-quoted scalar doesn't parse: {raw!r}",))
-    return inner.replace("''", "'")
+    return match.group(1).replace("''", "'")
 
 
 def plain(lineno, raw):
@@ -147,7 +153,9 @@ def parse_entry(entry):
     match = KEY_RE.match(head.rstrip())
     if not match:
         return Invalid((f"line {lineno}: not a `key: value` line: {head!r}",))
-    value = entry_value(lineno, (match.group(2) or "").strip(), tuple(ln for _, ln in rest))
+    text = (match.group(2) or "").strip()
+    # A `#` straight after `key: ` opens a comment, leaving the value empty.
+    value = entry_value(lineno, "" if text.startswith("#") else text, tuple(ln for _, ln in rest))
     return value if isinstance(value, Invalid) else (lineno, match.group(1), value)
 
 
@@ -156,7 +164,13 @@ def parse_frontmatter(text):
     match = FRONTMATTER_RE.match(text.replace("\r\n", "\n"))
     if not match:
         return Invalid(("no frontmatter block between `---` lines",))
-    numbered = tuple(enumerate(match.group(1).split("\n"), start=2))
+    # A `#` in the first column is a comment line wherever it falls, even
+    # between a key and its indented continuation.
+    numbered = tuple(
+        (n, ln)
+        for n, ln in enumerate(match.group(1).split("\n"), start=2)
+        if not ln.startswith("#")
+    )
     leading = tuple(itertools.takewhile(lambda p: not is_top_level(p[1]), numbered))
     stray = tuple(f"line {n}: indented line before any key" for n, ln in leading if not is_blank(ln))
     body = numbered[len(leading) :]

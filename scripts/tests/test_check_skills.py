@@ -85,6 +85,17 @@ class ParseFrontmatterScalars(unittest.TestCase):
         text = "---\n# leading\nname: demo\n# between\ndescription: d\n---\n"
         self.assertEqual(fields(text), {"name": "demo", "description": "d"})
 
+    def test_trailing_comment_is_dropped_from_quoted_scalars(self):
+        text = "---\nname: \"demo\" # the name\ndescription: 'd' # what\n---\n"
+        self.assertEqual(fields(text), {"name": "demo", "description": "d"})
+
+    def test_comment_line_after_quoted_scalar_is_skipped(self):
+        text = '---\ndescription: "d"\n# between\nname: \'demo\'\n# after\n---\n'
+        self.assertEqual(fields(text), {"name": "demo", "description": "d"})
+
+    def test_comment_alone_after_key_is_an_empty_value(self):
+        self.assertIsNone(fields("---\nname: demo\ndescription: # none\n---\n")["description"])
+
     def test_crlf_line_endings(self):
         text = "---\r\nname: demo\r\ndescription: one\r\n  two\r\n---\r\n\r\n# Body\r\n"
         self.assertEqual(fields(text), {"name": "demo", "description": "one two"})
@@ -169,6 +180,10 @@ class SkillErrors(unittest.TestCase):
     def test_empty_description(self):
         (error,) = skill_errors("demo", "---\nname: demo\ndescription:\n---\n")
         self.assertIn("`description:` is not a non-empty string", error)
+
+    def test_description_that_is_only_a_comment(self):
+        (problem,) = skill_errors("demo", "---\nname: demo\ndescription: # todo\n---\n")
+        self.assertIn("`description:` is not a non-empty string", problem)
 
     def test_nested_name(self):
         text = "---\nname:\n  first: demo\ndescription: d\n---\n"
