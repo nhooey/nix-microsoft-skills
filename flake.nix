@@ -147,11 +147,15 @@
           # Asserts the aggregate shape that every downstream relies on:
           # one directory per pinned skill, each with a top-level SKILL.md whose YAML
           # frontmatter parses, carries `name:`, and matches the directory.
-          # Silent corruption is worse than a noisy failure here.
+          # Silent corruption is worse than a noisy failure here. yq-go parses
+          # the frontmatter.
           skillsValid =
             pkgs.runCommand "skills-valid"
               {
-                nativeBuildInputs = [ pkgs.python3 ];
+                nativeBuildInputs = [
+                  pkgs.python3
+                  pkgs.yq-go
+                ];
                 inherit all;
                 expectedCount = toString (lib.length (lib.attrNames pins.skills));
                 expected = lib.concatStringsSep "\n" (lib.attrNames pins.skills);
@@ -170,6 +174,7 @@
             runtimeInputs = [
               pkgs.git
               pkgs.python3
+              pkgs.yq-go
             ];
             text = ''
               exec python3 ${./scripts/skills_dev.py} "$@"
@@ -182,7 +187,10 @@
           scriptsTests =
             pkgs.runCommand "scripts-tests"
               {
-                nativeBuildInputs = [ pkgs.python3 ];
+                nativeBuildInputs = [
+                  pkgs.python3
+                  pkgs.yq-go
+                ];
                 src = lib.fileset.toSource {
                   root = ./.;
                   fileset = lib.fileset.unions [
@@ -230,6 +238,7 @@
               pkgs.shfmt
               pkgs.shellcheck
               pkgs.python3
+              pkgs.yq-go
             ];
             commands = [
               {
