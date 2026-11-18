@@ -1,0 +1,7 @@
+# agent-skill-flake's skill checks are off: `skills/` holds no skill
+# folder for them to check.
+[layout]
+enable = false
+
+[description]
+enable = false
