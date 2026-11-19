@@ -44,7 +44,7 @@ PINS = f"""{{
 }}
 """
 
-PINS_FILE = Path(__file__).resolve().parents[2] / "skills" / "default.nix"
+PINS_FILE = Path(__file__).resolve().parents[2] / "pins.nix"
 
 
 def block(src, key):
@@ -111,7 +111,7 @@ class MainRewritesFile(unittest.TestCase):
 
     def run_main(self, *args):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp, "default.nix")
+            path = Path(tmp, "pins.nix")
             path.write_text(PINS)
             with redirect_stderr(StringIO()) as err:
                 code = main([str(path), *args])

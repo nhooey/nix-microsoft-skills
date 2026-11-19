@@ -26,7 +26,7 @@ Downstreams decide how to install them.
 | `frontend-ui-engineering-avalonia` | `peterblazejewicz/claude-plugins` |
 
 Each skill's package is `agent-skill-nhooey-microsoft-<skill>`.
-All pins live in [`skills/default.nix`](skills/default.nix) — one attrset, one source of truth.
+All pins live in [`pins.nix`](pins.nix) — one attrset, one source of truth.
 
 ## Consuming
 

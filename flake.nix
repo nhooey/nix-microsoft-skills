@@ -67,7 +67,7 @@
           ...
         }:
         let
-          pins = import ./skills/default.nix;
+          pins = import ./pins.nix;
 
           # Memoize per-repo fetches: one tarball per unique (owner, repo,
           # rev), shared across every skill that pins to it.
@@ -182,7 +182,7 @@
           };
 
           # Unit tests for the scripts' pure cores, plus the pin rewrite run
-          # against the real skills/default.nix, and the packaged skills-dev
+          # against the real pins.nix, and the packaged skills-dev
           # answering --help.
           scriptsTests =
             pkgs.runCommand "scripts-tests"
@@ -195,7 +195,7 @@
                   root = ./.;
                   fileset = lib.fileset.unions [
                     ./scripts
-                    ./skills/default.nix
+                    ./pins.nix
                   ];
                 };
               }

@@ -103,7 +103,7 @@ def parser():
         "bump",
         help="compare pinned upstream revisions with GitHub",
         description=(
-            "Compare each pinned upstream revision in skills/default.nix with "
+            "Compare each pinned upstream revision in pins.nix with "
             "GitHub HEAD. With --apply, rewrite the behind ones, one commit "
             "per upstream repo."
         ),
