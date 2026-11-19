@@ -12,48 +12,30 @@ Usage:
 Fails loudly on:
   - count mismatch, or a missing or unexpected skill directory
   - missing SKILL.md
-  - frontmatter that isn't a block of top-level `key: value` entries
+  - frontmatter that isn't valid YAML, isn't a mapping, or repeats a key
   - frontmatter missing `name:` or `description:`, or either not a string
   - frontmatter `name:` not matching the containing directory
 
-The frontmatter parser reads the YAML subset skill files use: plain,
-single-quoted and double-quoted scalars (on one line or folded over
-several), literal and folded block scalars, and nested blocks or flow
-collections (kept as non-string values). Anchors, aliases, tags, reserved
-indicators, duplicate keys and a plain scalar holding `: ` are errors,
-as they would be (or would change the value) under a full YAML parser.
+yq-go (`yq`, on PATH) parses the frontmatter as YAML 1.2 and hands it over
+as JSON, so the check reads each value as a YAML parser does.
 """
 
-import itertools
 import json
 import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Mapping, Tuple, Union
+from typing import Mapping, Optional, Tuple, Union
 
 
 FRONTMATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)\n?^---[ \t]*$", re.DOTALL | re.MULTILINE)
-KEY_RE = re.compile(r"\A([A-Za-z0-9_][A-Za-z0-9_.-]*):(?:[ \t]+(.*))?\Z")
-BLOCK_RE = re.compile(r"\A([|>])([+-]?)[1-9]?([+-]?)[ \t]*(?:#.*)?\Z")
-
-
-class NonScalar:
-    """A nested mapping, sequence or flow collection: present, not a string."""
-
-    def __repr__(self):
-        return "<non-scalar>"
-
-
-NON_SCALAR = NonScalar()
-
-Value = Union[str, None, NonScalar]
 
 
 @dataclass(frozen=True, slots=True)
 class Parsed:
-    fields: Mapping[str, Value]
+    fields: Mapping[str, object]
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,121 +43,32 @@ class Invalid:
     problems: Tuple[str, ...]
 
 
-def is_top_level(line):
-    return bool(line) and line[0] not in " \t#"
+Frontmatter = Union[Parsed, Invalid]
 
 
-def is_blank(line):
-    return not line.strip() or line.lstrip().startswith("#")
-
-
-def dedent(lines):
-    content = tuple(ln for ln in lines if ln.strip())
-    indent = min((len(ln) - len(ln.lstrip(" \t")) for ln in content), default=0)
-    return tuple(ln[indent:] for ln in lines)
-
-
-def fold(lines):
-    """Join lines as YAML folding does: one newline per blank line, else a space."""
-    paragraphs = (
-        " ".join(group)
-        for blank, group in itertools.groupby(lines, key=lambda ln: not ln.strip())
-        if not blank
-    )
-    return "\n".join(paragraphs)
-
-
-def block_scalar(style, chomp, lines):
-    body = dedent(lines)
-    trailing = len(body) - len(tuple(itertools.dropwhile(lambda ln: not ln.strip(), reversed(body))))
-    content = body[: len(body) - trailing]
-    text = "\n".join(content) if style == "|" else fold(content)
-    if not text:
-        return ""
-    if chomp == "-":
-        return text
-    if chomp == "+":
-        return text + "\n" * (trailing + 1)
-    return text + "\n"
-
-
-def double_quoted(lineno, raw):
-    try:
-        return json.loads(raw)
-    except ValueError:
-        return Invalid((f"line {lineno}: double-quoted scalar doesn't parse: {raw!r}",))
-
-
-def single_quoted(lineno, raw):
-    inner = raw[1:-1]
-    if len(raw) < 2 or not raw.endswith("'") or "'" in inner.replace("''", ""):
-        return Invalid((f"line {lineno}: single-quoted scalar doesn't parse: {raw!r}",))
-    return inner.replace("''", "'")
-
-
-def plain(lineno, raw):
-    text = re.sub(r"[ \t]+#.*\Z", "", raw)
-    if text[0] in "@`":
-        return Invalid((f"line {lineno}: {text[0]!r} is reserved at the start of a scalar",))
-    if text[0] in "&*!":
-        return Invalid((f"line {lineno}: anchors, aliases and tags aren't supported",))
-    if text[0] in "[{":
-        return NON_SCALAR
-    if ": " in text or text.endswith(":"):
-        return Invalid((f"line {lineno}: plain scalar contains ': ' (quote it): {text!r}",))
-    return text
-
-
-def entry_value(lineno, rest, continuation):
-    """Value of one top-level entry: its text after `key:` and its indented lines."""
-    block = BLOCK_RE.match(rest)
-    folded = " ".join((rest, *(ln.strip() for ln in continuation if ln.strip()))).strip()
-    if not rest:
-        return NON_SCALAR if any(not is_blank(ln) for ln in continuation) else None
-    if block:
-        return block_scalar(block.group(1), block.group(2) or block.group(3), continuation)
-    if rest.startswith('"'):
-        return double_quoted(lineno, folded)
-    if rest.startswith("'"):
-        return single_quoted(lineno, folded)
-    return plain(lineno, folded)
-
-
-def parse_entry(entry):
-    """(lineno, key, value) for one entry, or an Invalid naming its first line."""
-    (lineno, head), *rest = entry
-    match = KEY_RE.match(head.rstrip())
-    if not match:
-        return Invalid((f"line {lineno}: not a `key: value` line: {head!r}",))
-    value = entry_value(lineno, (match.group(2) or "").strip(), tuple(ln for _, ln in rest))
-    return value if isinstance(value, Invalid) else (lineno, match.group(1), value)
-
-
-def parse_frontmatter(text):
-    """Parsed fields of a SKILL.md's frontmatter, or Invalid with the reasons."""
+def frontmatter_block(text):
+    """The YAML between a SKILL.md's opening and closing `---` lines, or None."""
     match = FRONTMATTER_RE.match(text)
-    if not match:
-        return Invalid(("no frontmatter block between `---` lines",))
-    numbered = tuple(enumerate(match.group(1).split("\n"), start=2))
-    leading = tuple(itertools.takewhile(lambda p: not is_top_level(p[1]), numbered))
-    stray = tuple(f"line {n}: indented line before any key" for n, ln in leading if not is_blank(ln))
-    body = numbered[len(leading) :]
-    groups = itertools.accumulate((int(is_top_level(ln)) for _, ln in body))
-    entries = tuple(
-        tuple(pair for _, pair in group)
-        for _, group in itertools.groupby(zip(groups, body), key=lambda g: g[0])
-    )
-    parsed = tuple(parse_entry(e) for e in entries)
-    invalid = tuple(p for result in parsed if isinstance(result, Invalid) for p in result.problems)
-    good = tuple(result for result in parsed if not isinstance(result, Invalid))
-    keys = tuple(key for _, key, _ in good)
-    duplicates = tuple(
-        f"line {n}: duplicate key `{key}`" for i, (n, key, _) in enumerate(good) if key in keys[:i]
-    )
-    problems = stray + invalid + duplicates
-    if problems:
-        return Invalid(problems)
-    return Parsed(MappingProxyType({key: value for _, key, value in good}))
+    return match.group(1) + "\n" if match else None
+
+
+def duplicate_keys(pairs):
+    keys = tuple(key for key, _ in pairs)
+    return tuple(dict.fromkeys(key for i, key in enumerate(keys) if key in keys[:i]))
+
+
+def from_json(text):
+    """Parsed fields from yq's JSON output, or Invalid when it isn't a mapping
+    or repeats a top-level key (yq keeps every copy of a key in its JSON)."""
+    value = json.loads(text, object_pairs_hook=tuple)
+    if value is None:
+        return Parsed(MappingProxyType({}))
+    if not isinstance(value, tuple):
+        return Invalid((f"not a mapping of keys to values: {value!r}",))
+    duplicates = duplicate_keys(value)
+    if duplicates:
+        return Invalid(tuple(f"duplicate key `{key}`" for key in duplicates))
+    return Parsed(MappingProxyType(dict(value)))
 
 
 def field_errors(name, fields, key, check_value=None):
@@ -187,11 +80,12 @@ def field_errors(name, fields, key, check_value=None):
     return check_value(value) if check_value else ()
 
 
-def skill_errors(name, skill_md):
-    """Problems with one skill directory, given its SKILL.md text (None if absent)."""
-    if skill_md is None:
-        return (f"{name}: SKILL.md missing",)
-    match parse_frontmatter(skill_md):
+def skill_errors(name, frontmatter: Optional[Frontmatter]):
+    """Problems with one skill directory, given its parsed frontmatter (None
+    when SKILL.md is absent)."""
+    match frontmatter:
+        case None:
+            return (f"{name}: SKILL.md missing",)
         case Invalid(problems):
             return tuple(f"{name}: frontmatter: {p}" for p in problems)
         case Parsed(fields):
@@ -220,7 +114,8 @@ def listing_errors(actual, expected, expected_count):
 
 
 def validate(skills, expected, expected_count):
-    """Every problem with the aggregate: `skills` maps directory name to SKILL.md text or None."""
+    """Every problem with the aggregate: `skills` maps directory name to its
+    parsed frontmatter, or None when SKILL.md is missing."""
     return listing_errors(tuple(skills), expected, expected_count) + tuple(
         e for name in sorted(skills) for e in skill_errors(name, skills[name])
     )
@@ -228,6 +123,25 @@ def validate(skills, expected, expected_count):
 
 def parse_expected(text):
     return tuple(sorted(line.strip() for line in text.splitlines() if line.strip()))
+
+
+# --- shell: yq and the file system -------------------------------------------
+
+
+def parse_frontmatter(text):
+    """A SKILL.md's frontmatter parsed by yq-go, or Invalid with the reasons."""
+    block = frontmatter_block(text)
+    if block is None:
+        return Invalid(("no frontmatter block between `---` lines",))
+    result = subprocess.run(
+        ["yq", "--input-format=yaml", "--output-format=json", "."],
+        input=block,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return Invalid((f"not valid YAML: {result.stderr.strip()}",))
+    return from_json(result.stdout)
 
 
 def read_skill_md(share_dir, name):
@@ -240,7 +154,10 @@ def read_skill_md(share_dir, name):
 
 def read_skills(share_dir):
     names = sorted(n for n in os.listdir(share_dir) if os.path.isdir(os.path.join(share_dir, n)))
-    return MappingProxyType({n: read_skill_md(share_dir, n) for n in names})
+    texts = {n: read_skill_md(share_dir, n) for n in names}
+    return MappingProxyType(
+        {n: None if text is None else parse_frontmatter(text) for n, text in texts.items()}
+    )
 
 
 def main(argv):

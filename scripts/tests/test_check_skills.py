@@ -8,9 +8,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from check_skills import (  # noqa: E402
-    NON_SCALAR,
     Invalid,
     Parsed,
+    from_json,
+    frontmatter_block,
     listing_errors,
     main,
     parse_expected,
@@ -36,144 +37,121 @@ def problems(text):
     return result.problems
 
 
-class ParseFrontmatterScalars(unittest.TestCase):
-    def test_plain_scalars(self):
+def errors(name, text):
+    return skill_errors(name, parse_frontmatter(text))
+
+
+class FrontmatterBlock(unittest.TestCase):
+    def test_text_between_fences(self):
+        self.assertEqual(frontmatter_block(skill_md()), "name: demo\ndescription: Does a thing.\n")
+
+    def test_none_without_fences(self):
+        self.assertIsNone(frontmatter_block("# Just a heading\n"))
+
+    def test_none_when_unclosed(self):
+        self.assertIsNone(frontmatter_block("---\nname: demo\n"))
+
+
+class FromJson(unittest.TestCase):
+    def test_mapping(self):
+        self.assertEqual(dict(from_json('{"name": "demo"}').fields), {"name": "demo"})
+
+    def test_null_is_empty(self):
+        self.assertEqual(dict(from_json("null").fields), {})
+
+    def test_scalar_is_invalid(self):
+        self.assertEqual(from_json('"text"').problems, ("not a mapping of keys to values: 'text'",))
+
+    def test_duplicate_key_is_invalid(self):
         self.assertEqual(
-            fields(skill_md()), {"name": "demo", "description": "Does a thing."}
+            from_json('{"name": "a", "name": "b"}').problems, ("duplicate key `name`",)
         )
 
-    def test_double_quoted_scalar_with_escapes(self):
-        text = '---\nname: "demo"\ndescription: "Say \\"hi\\": now"\n---\n'
-        self.assertEqual(fields(text)["description"], 'Say "hi": now')
 
-    def test_single_quoted_scalar_with_doubled_quote(self):
-        text = "---\nname: 'demo'\ndescription: 'it''s: fine'\n---\n"
-        self.assertEqual(fields(text)["description"], "it's: fine")
+class ParseFrontmatterAsYaml(unittest.TestCase):
+    def test_plain_scalars(self):
+        self.assertEqual(fields(skill_md()), {"name": "demo", "description": "Does a thing."})
 
-    def test_plain_scalar_continued_on_indented_lines_folds_to_spaces(self):
-        text = "---\nname: demo\ndescription: one\n  two\n  three\n---\n"
-        self.assertEqual(fields(text)["description"], "one two three")
+    def test_quoted_name(self):
+        self.assertEqual(fields('---\nname: "demo"\ndescription: d\n---\n')["name"], "demo")
 
-    def test_trailing_comment_is_dropped_from_plain_scalar(self):
-        text = "---\nname: demo # the name\ndescription: x\n---\n"
-        self.assertEqual(fields(text)["name"], "demo")
+    def test_double_quoted_scalar_with_trailing_comment(self):
+        text = '---\nname: demo\ndescription: "Use it" # why\n---\n'
+        self.assertEqual(fields(text)["description"], "Use it")
 
-    def test_folded_block_scalar_clips_to_one_newline(self):
-        text = "---\nname: demo\ndescription: >\n  one\n  two\n\n  three\n---\n"
-        self.assertEqual(fields(text)["description"], "one two\nthree\n")
+    def test_single_quoted_scalar_with_trailing_comment(self):
+        text = "---\nname: 'demo' # the name\ndescription: 'Use it' # why\n---\n"
+        self.assertEqual(fields(text), {"name": "demo", "description": "Use it"})
 
-    def test_literal_block_scalar_keeps_newlines(self):
-        text = "---\nname: demo\ndescription: |\n  one\n  two\n---\n"
-        self.assertEqual(fields(text)["description"], "one\ntwo\n")
+    def test_yaml_escape_json_lacks(self):
+        text = '---\nname: demo\ndescription: "caf\\xe9 tab\\ttab"\n---\n'
+        self.assertEqual(fields(text)["description"], "café tab\ttab")
 
-    def test_strip_chomping_drops_final_newline(self):
-        text = "---\nname: demo\ndescription: >-\n  one\n  two\n---\n"
-        self.assertEqual(fields(text)["description"], "one two")
+    def test_null_description(self):
+        self.assertIsNone(fields("---\nname: demo\ndescription: null\n---\n")["description"])
 
-    def test_nested_mapping_is_non_scalar(self):
-        text = "---\nname: demo\nmetadata:\n  type: x\ndescription: d\n---\n"
-        self.assertIs(fields(text)["metadata"], NON_SCALAR)
+    def test_tilde_description(self):
+        self.assertIsNone(fields("---\nname: demo\ndescription: ~\n---\n")["description"])
 
-    def test_flow_sequence_is_non_scalar(self):
-        text = "---\nname: demo\ndescription: d\ntags: [a, b]\n---\n"
-        self.assertIs(fields(text)["tags"], NON_SCALAR)
-
-    def test_empty_value_is_none(self):
-        self.assertIsNone(fields("---\nname:\ndescription: d\n---\n")["name"])
-
-    def test_comment_lines_are_skipped(self):
-        text = "---\n# leading\nname: demo\n# between\ndescription: d\n---\n"
-        self.assertEqual(fields(text), {"name": "demo", "description": "d"})
-
-
-class ParseFrontmatterRejects(unittest.TestCase):
     def test_no_frontmatter(self):
         self.assertEqual(
             problems("# Just a heading\n"), ("no frontmatter block between `---` lines",)
         )
 
-    def test_unclosed_frontmatter(self):
-        self.assertEqual(
-            problems("---\nname: demo\n"), ("no frontmatter block between `---` lines",)
-        )
-
-    def test_line_without_key(self):
-        (problem,) = problems("---\nname: demo\njust words\n---\n")
-        self.assertIn("line 3: not a `key: value` line", problem)
-
-    def test_plain_scalar_holding_colon_space(self):
+    def test_invalid_yaml(self):
         (problem,) = problems("---\nname: demo\ndescription: Use for: things\n---\n")
-        self.assertIn("line 3: plain scalar contains ': '", problem)
-
-    def test_unterminated_double_quote(self):
-        (problem,) = problems('---\nname: "demo\ndescription: d\n---\n')
-        self.assertIn("line 2: double-quoted scalar doesn't parse", problem)
-
-    def test_unterminated_single_quote(self):
-        (problem,) = problems("---\nname: 'demo\ndescription: d\n---\n")
-        self.assertIn("line 2: single-quoted scalar doesn't parse", problem)
+        self.assertTrue(problem.startswith("not valid YAML: "), problem)
 
     def test_duplicate_key(self):
-        (problem,) = problems("---\nname: a\nname: b\ndescription: d\n---\n")
-        self.assertEqual(problem, "line 3: duplicate key `name`")
-
-    def test_alias(self):
-        (problem,) = problems("---\nname: *anchor\ndescription: d\n---\n")
-        self.assertIn("anchors, aliases and tags aren't supported", problem)
-
-    def test_reserved_indicator(self):
-        (problem,) = problems("---\nname: `demo`\ndescription: d\n---\n")
-        self.assertIn("is reserved", problem)
-
-    def test_indented_line_before_any_key(self):
-        (problem,) = problems("---\n  name: demo\ndescription: d\n---\n")
-        self.assertEqual(problem, "line 2: indented line before any key")
+        self.assertEqual(
+            problems("---\nname: a\nname: b\ndescription: d\n---\n"), ("duplicate key `name`",)
+        )
 
 
 class SkillErrors(unittest.TestCase):
     def test_valid_skill_has_no_errors(self):
-        self.assertEqual(skill_errors("demo", skill_md()), ())
+        self.assertEqual(errors("demo", skill_md()), ())
 
     def test_missing_skill_md(self):
         self.assertEqual(skill_errors("demo", None), ("demo: SKILL.md missing",))
 
     def test_name_mismatch(self):
         self.assertEqual(
-            skill_errors("demo", skill_md(name="other")),
+            errors("demo", skill_md(name="other")),
             ("demo: frontmatter name='other' != directory name",),
-        )
-
-    def test_block_scalar_name_does_not_match_directory(self):
-        text = "---\nname: |\n  demo\ndescription: d\n---\n"
-        self.assertEqual(
-            skill_errors("demo", text),
-            ("demo: frontmatter name='demo\\n' != directory name",),
         )
 
     def test_missing_name(self):
         self.assertEqual(
-            skill_errors("demo", "---\ndescription: d\n---\n"),
+            errors("demo", "---\ndescription: d\n---\n"),
             ("demo: frontmatter missing `name:`",),
         )
 
     def test_missing_description(self):
         self.assertEqual(
-            skill_errors("demo", "---\nname: demo\n---\n"),
+            errors("demo", "---\nname: demo\n---\n"),
             ("demo: frontmatter missing `description:`",),
         )
 
-    def test_empty_description(self):
-        (error,) = skill_errors("demo", "---\nname: demo\ndescription:\n---\n")
-        self.assertIn("`description:` is not a non-empty string", error)
+    def test_null_description(self):
+        self.assertEqual(
+            errors("demo", "---\nname: demo\ndescription: ~\n---\n"),
+            ("demo: frontmatter `description:` is not a non-empty string (None)",),
+        )
+
+    def test_number_name(self):
+        self.assertEqual(
+            errors("2024", "---\nname: 2024\ndescription: d\n---\n"),
+            ("2024: frontmatter `name:` is not a non-empty string (2024)",),
+        )
 
     def test_nested_name(self):
-        text = "---\nname:\n  first: demo\ndescription: d\n---\n"
-        (error,) = skill_errors("demo", text)
+        (error,) = errors("demo", "---\nname:\n  first: demo\ndescription: d\n---\n")
         self.assertIn("`name:` is not a non-empty string", error)
 
     def test_frontmatter_problems_are_prefixed_with_skill(self):
         self.assertEqual(
-            skill_errors("demo", "no frontmatter"),
+            errors("demo", "no frontmatter"),
             ("demo: frontmatter: no frontmatter block between `---` lines",),
         )
 
@@ -197,7 +175,11 @@ class ListingErrors(unittest.TestCase):
 
 class Validate(unittest.TestCase):
     def test_collects_listing_and_skill_errors(self):
-        skills = {"a": skill_md("a"), "b": None, "c": skill_md("x")}
+        skills = {
+            "a": Parsed({"name": "a", "description": "d"}),
+            "b": None,
+            "c": Parsed({"name": "x", "description": "d"}),
+        }
         self.assertEqual(
             validate(skills, ("a", "b"), 2),
             (
