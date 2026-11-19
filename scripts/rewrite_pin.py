@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rewrite one repo's rev and hash in skills/default.nix, in place.
+Rewrite one repo's rev and hash in pins.nix, in place.
 
 Usage:
   rewrite_pin.py PINS_FILE KEY OLD_REV NEW_REV OLD_HASH NEW_HASH

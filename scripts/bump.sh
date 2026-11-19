@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compare each pinned upstream rev in skills/default.nix to GitHub HEAD.
+# Compare each pinned upstream rev in pins.nix to GitHub HEAD.
 #
 #   bump            read-only — print "<repo>: <old> → <new> (<N skills>)"
 #                   per behind upstream, or "<repo>: up to date".
@@ -30,7 +30,7 @@ if ! repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
   echo "bump must be run from inside a clone of nix-microsoft-skills" >&2
   exit 1
 fi
-pins_file=$repo_root/skills/default.nix
+pins_file=$repo_root/pins.nix
 
 if [[ ! -f $pins_file ]]; then
   echo "pins file not found: $pins_file" >&2

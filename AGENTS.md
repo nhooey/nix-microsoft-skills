@@ -7,7 +7,7 @@ skill, plus `agent-skills-nhooey-microsoft-all` (the default). It builds on
 `nhooey/skillspkgs`; installing the skills is the consumer's job, not
 this repository's.
 
-- `skills/default.nix` holds every upstream pin, in one attrset.
+- `pins.nix` holds every upstream pin, in one attrset.
 - `scripts/skills_dev.py` is `skills-dev`, the dev shell's tool for
   this repository's own commands.
 - `scripts/check_skills.py` validates the built skills for the
